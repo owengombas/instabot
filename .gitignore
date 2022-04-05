@@ -1,3 +1,4 @@
 venv/
 session*.json
 session_*.json
+.DS_Store
