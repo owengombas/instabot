@@ -13,43 +13,53 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Crawler:
-    username: str
-    enc_password: str
-    userId: str
-    session_cookies: dict = constants.LOGIN_COOKIES
-    session_headers: dict = constants.LOGIN_HEADERS
+    _username: str
+    _enc_password: str
+    _session_cookies: dict = constants.LOGIN_COOKIES
+    _session_headers: dict = constants.LOGIN_HEADERS
 
     def __init__(self, username: str, enc_password: str):
-        self.username = username
-        self.enc_password = enc_password
+        """
+        Create a crawler instance that is linked to the specified account :param username: The username of your
+        account :param enc_password: Your encoded password, you can get it by inspecting the request that is sent
+        when you log into your instagram account
+        """
+        self._username = username
+        self._enc_password = enc_password
 
     def save_session(self, sessionid: str, csrftoken: str):
-        with open(f'session_{self.username}.json', 'w') as session:
+        """
+        Save the current session into a file, to avoid doing too many login requests, so the instagram API won't block you
+        :param sessionid: The session ID
+        :param csrftoken: The csrftoken token
+        """
+        with open(f'session_{self._username}.json', 'w') as session:
             session.write(json.dumps({
                 'csrftoken': csrftoken,
                 'sessionid': sessionid
             }))
 
     def login_from_saved_session(self):
-        if not path.exists(f'session_{self.username}.json'):
-            logging.warning(f'Saved session for {self.username} not found')
+        """
+        Log into your instagram account using the saved sessionid, so you don't need to make a login request to the instagram API
+        """
+        if not path.exists(f'session_{self._username}.json'):
+            logging.warning(f'Saved session for {self._username} not found')
             return False
 
-        with open(f'session_{self.username}.json', 'r') as session:
+        with open(f'session_{self._username}.json', 'r') as session:
             session = json.loads(session.read())
-            self.session_cookies['sessionid'] = session['sessionid']
-            self.session_cookies['csrftoken'] = session['csrftoken']
-            logging.info(f'Logged from saved session of {self.username} with sessionid={session["sessionid"]}')
+            self._session_cookies['sessionid'] = session['sessionid']
+            self._session_cookies['csrftoken'] = session['csrftoken']
+            logging.info(f'Logged from saved session of {self._username} with sessionid={session["sessionid"]}')
 
         return True
 
     def login(self, force=False):
         """
-        Log into the instagram account
-        :param force: Force the connection without trying to look at the saved session
-        :param username: The username
-        :param enc_password: The encrypted password, you can get it while you log into your account and inspect the loggin request
-        :return:
+        Try to log into the instagram account with the saved session first, if it doesn't exists it uses the
+        instagram API and save the session into a file
+        :param force: Force the connection without trying to retrieve the saved session
         """
 
         if not force:
@@ -57,8 +67,8 @@ class Crawler:
                 return
 
         data = {
-            'enc_password': self.enc_password,
-            'username': self.username,
+            'enc_password': self._enc_password,
+            'username': self._username,
             'queryParams': '{}',
             'optIntoOneTap': 'false',
             'stopDeletionNonce': '',
@@ -72,17 +82,17 @@ class Crawler:
             data=data
         )
 
-        self.session_cookies = response.cookies.get_dict()
-        self.session_headers = constants.LOGIN_HEADERS
-        self.session_headers['csrftoken'] = self.session_cookies.get('csrftoken')
+        self._session_cookies = response.cookies.get_dict()
+        self._session_headers = constants.LOGIN_HEADERS
+        self._session_headers['csrftoken'] = self._session_cookies.get('csrftoken')
 
-        self.save_session(self.session_cookies.get('sessionid'), self.session_cookies.get('csrftoken'))
+        self.save_session(self._session_cookies.get('sessionid'), self._session_cookies.get('csrftoken'))
 
-        if not self.session_cookies.get('sessionid'):
+        if not self._session_cookies.get('sessionid'):
             raise Exception('Could not log into your account', response.json())
 
         logging.info(
-            f'Logged as {self.username}, sessionid={self.session_cookies.get("sessionid")}, csrftoken={self.session_headers.get("csrftoken")}')
+            f'Logged as {self._username}, sessionid={self._session_cookies.get("sessionid")}, csrftoken={self._session_headers.get("csrftoken")}')
 
     def fetch_profile(self, username: str):
         """
@@ -100,7 +110,7 @@ class Crawler:
             f'https://www.instagram.com/{username}/',
             headers=constants.LOGIN_HEADERS,
             params=params,
-            cookies=self.session_cookies
+            cookies=self._session_cookies
         )
 
         datas: ProfileResponse = ProfileResponse.from_dict(response.json())
@@ -111,6 +121,11 @@ class Crawler:
         return datas.graphql.user
 
     def get_user_id(self, username: str):
+        """
+        Get the id of a user by giving his username
+        :param username: The username
+        :return: The user id
+        """
         profile = self.fetch_profile(username)
         return profile.id
 
@@ -161,7 +176,7 @@ class Crawler:
         response = requests.post(
             f'https://i.instagram.com/rupload_igphoto/fb_uploader_{upload_id}',
             headers=upload_headers,
-            cookies=self.session_cookies,
+            cookies=self._session_cookies,
             data=image_data
         )
 
@@ -191,13 +206,13 @@ class Crawler:
         }
 
         configure_headers = constants.LOGIN_HEADERS | {
-            'x-csrftoken': self.session_cookies.get('csrftoken')
+            'x-csrftoken': self._session_cookies.get('csrftoken')
         }
 
         response = requests.post(
             'https://i.instagram.com/api/v1/media/configure/',
             headers=configure_headers,
-            cookies=self.session_cookies,
+            cookies=self._session_cookies,
             data=data
         )
 
