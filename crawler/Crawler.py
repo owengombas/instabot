@@ -7,7 +7,9 @@ from typing import List
 import requests
 from PIL import Image
 from crawler import constants
-from crawler.ProfileResponse import ProfileResponse
+from crawler.reponses.FollowersResponse import FollowersResponse
+from crawler.reponses.FollowingResponse import FollowingResponse, User
+from crawler.reponses.ProfileResponse import ProfileResponse
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -51,18 +53,20 @@ class Crawler:
             session = json.loads(session.read())
             self._session_cookies['sessionid'] = session['sessionid']
             self._session_cookies['csrftoken'] = session['csrftoken']
+            self._session_headers['csrftoken'] = session['csrftoken']
+            self._session_headers['x-csrftoken'] = session['csrftoken']
             logging.info(f'Logged from saved session of {self._username} with sessionid={session["sessionid"]}')
 
         return True
 
-    def login(self, force=False):
+    def login(self, load_saved_session=True):
         """
         Try to log into the instagram account with the saved session first, if it doesn't exists it uses the
         instagram API and save the session into a file
-        :param force: Force the connection without trying to retrieve the saved session
+        :param load_saved_session: Force the connection without trying to retrieve the saved session
         """
 
-        if not force:
+        if load_saved_session:
             if self.login_from_saved_session():
                 return
 
@@ -77,14 +81,14 @@ class Crawler:
 
         response = requests.post(
             'https://www.instagram.com/accounts/login/ajax/',
-            headers=constants.LOGIN_HEADERS,
-            cookies=constants.LOGIN_COOKIES,
+            headers=self._session_headers,
+            cookies=self._session_cookies,
             data=data
         )
 
         self._session_cookies = response.cookies.get_dict()
-        self._session_headers = constants.LOGIN_HEADERS
         self._session_headers['csrftoken'] = self._session_cookies.get('csrftoken')
+        self._session_headers['x-csrftoken'] = self._session_headers['csrftoken']
 
         self.save_session(self._session_cookies.get('sessionid'), self._session_cookies.get('csrftoken'))
 
@@ -128,6 +132,80 @@ class Crawler:
         """
         profile = self.fetch_profile(username)
         return profile.id
+
+    def get_followers(self, user_id: str, count=12, max_id=None):
+        request_url = f"https://i.instagram.com/api/v1/friendships/{user_id}/followers/?count={count}"
+
+        if max_id is not None:
+            request_url = f"{request_url}&max_id={max_id}"
+
+        response = requests.get(
+            request_url,
+            headers=self._session_headers,
+            cookies=self._session_cookies
+        ).json()
+
+        return FollowersResponse.from_dict(response)
+
+    def get_all_followers(self, username: str):
+        user_profile = self.fetch_profile(username)
+
+        users: List[User] = []
+        count = 650
+        next_max_id = None
+
+        while len(users) < user_profile.edge_followed_by.count:
+            followers = self.get_followers(user_profile.id, count, next_max_id)
+            next_max_id = followers.next_max_id
+            users = users + followers.users
+
+        return users
+
+    def follow(self, user_id: str):
+        response = requests.post(
+            f"https://www.instagram.com/web/friendships/{user_id}/follow/",
+            headers=self._session_headers,
+            cookies=self._session_cookies
+        )
+
+        return response
+
+    def unfollow(self, user_id: str):
+        response = requests.post(
+            f"https://www.instagram.com/web/friendships/{user_id}/unfollow/",
+            headers=self._session_headers,
+            cookies=self._session_cookies
+        )
+
+        return response
+
+    def get_following(self, user_id: str, count=12, max_id=None):
+        request_url = f"https://i.instagram.com/api/v1/friendships/{user_id}/following/?count={count}"
+
+        if max_id is not None:
+            request_url = f"{request_url}&max_id={max_id}"
+
+        response = requests.get(
+            request_url,
+            headers=self._session_headers,
+            cookies=self._session_cookies
+        ).json()
+
+        return FollowingResponse.from_dict(response)
+
+    def get_all_following(self, username: str):
+        user_profile = self.fetch_profile(username)
+
+        users: List[User] = []
+        count = 650
+        next_max_id = None
+
+        while len(users) < user_profile.edge_follow.count:
+            followings = self.get_following(user_profile.id, count, next_max_id)
+            next_max_id = followings.next_max_id
+            users = users + followings.users
+
+        return users
 
     def post_image(
             self,
