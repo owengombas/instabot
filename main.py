@@ -2,15 +2,14 @@ from crawler.Crawler import Crawler
 import pandas as pd
 
 if __name__ == '__main__':
-    c = Crawler(
-        username="quizzical.bhabha",
-        enc_password="#PWD_INSTAGRAM_BROWSER:10:1652123837:AepQAPTDEnFlJ7jJzRCO/JRjEHprSs0bt0yv+UO3jdSmkdRs7v8KU2XcbYIYwcedClPpLt8BX8F2/WzwZ6tfFsHV8ZyTZOioQYlryCqbLG2B7/LHLq6yPjt4mBjFpxYYfDP7nrJoqMCfg5T1/DPLkEfYtTE=",
-        x_instagram_ajax="a1c047c8ac09"
+    instagram_0x6f77656e = Crawler(
+        username="0x6f77656e",
+        enc_password="#PWD_INSTAGRAM_BROWSER:10:1652197635:AepQAFxKBab+AXJAqgQQ5vl20WOxcF4pJUQaTfzD+52yr/wFTl0ljrkQmz3GlQ+iJxSnE5uocQWEneRj5Vg35sD2NnHF7Nfa+fc/pvyCrzFgKTNnKUt4QggoCmrZgvW3LtR1+aLsQBGyXWUj0smYzuCDQAs="
     )
 
-    c.login(False)
+    instagram_0x6f77656e.login(False)
 
-    followings = c.get_all_following("venfoo")
+    followings = instagram_0x6f77656e.get_all_followers("0x6f77656e")
 
     pd.DataFrame.from_dict(followings)
 
